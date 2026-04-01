@@ -436,7 +436,7 @@
         <h2>One runtime, many agents</h2>
         <p class="section-intro">
           Claude Code is organized around a <span class="hl">control plane</span> for many LLM calls. The core turn
-          loop lives in <a href="src/query.ts" target="_blank"><span class="code">src/query.ts</span></a>, and child agents extend
+          loop lives in <a href="https://github.com/shiyinw/claude-code/blob/main/src/query.ts" target="_blank"><span class="code">src/query.ts</span></a>, and child agents extend
           that same runtime. That keeps streaming, tools, permissions, compaction, and retry behavior aligned across
           parent and child execution.
         </p>
@@ -460,15 +460,15 @@
         </div>
         <p>
           That shape keeps the codebase from collapsing into one “agent does everything” loop. The tool registry in
-          <a href="src/tools.ts" target="_blank"><span class="code">src/tools.ts</span></a>,
-          the task registry in <a href="src/tasks.ts" target="_blank"><span class="code">src/tasks.ts</span></a>, and the task model
-          in <a href="src/Task.ts" target="_blank"><span class="code">src/Task.ts</span></a> give the system explicit control-plane
+          <a href="https://github.com/shiyinw/claude-code/blob/main/src/tools.ts" target="_blank"><span class="code">src/tools.ts</span></a>,
+          the task registry in <a href="https://github.com/shiyinw/claude-code/blob/main/src/tasks.ts" target="_blank"><span class="code">src/tasks.ts</span></a>, and the task model
+          in <a href="https://github.com/shiyinw/claude-code/blob/main/src/Task.ts" target="_blank"><span class="code">src/Task.ts</span></a> give the system explicit control-plane
           objects. That makes orchestration easier to debug, resume, and extend.
         </p>
         <p>
           It is worth being precise about the phrase “shared runtime.” Claude Code has both the generator loop
-          in <a href="src/query.ts" target="_blank"><span class="code">src/query.ts</span></a> and a stateful wrapper in
-          <a href="src/QueryEngine.ts" target="_blank"><span class="code">src/QueryEngine.ts</span></a>. The former is the turn kernel.
+          in <a href="https://github.com/shiyinw/claude-code/blob/main/src/query.ts" target="_blank"><span class="code">src/query.ts</span></a> and a stateful wrapper in
+          <a href="https://github.com/shiyinw/claude-code/blob/main/src/QueryEngine.ts" target="_blank"><span class="code">src/QueryEngine.ts</span></a>. The former is the turn kernel.
           The latter owns conversation-level lifecycle and persistence for the SDK and headless path. Together, they
           make the control plane feel like a runtime with clear ownership of turns, sessions, and persistence.
         </p>
@@ -476,8 +476,8 @@
           <p>
             The key architectural choice is <span class="hl">runtime reuse</span>. Parent and child agents rely on the same core loop: the main
             flow still lives in
-            <a href="src/query.ts" target="_blank"><span class="code">src/query.ts</span></a>, while child agents are launched through
-            <a href="src/tools/AgentTool/runAgent.ts" target="_blank"><span class="code">src/tools/AgentTool/runAgent.ts</span></a>
+            <a href="https://github.com/shiyinw/claude-code/blob/main/src/query.ts" target="_blank"><span class="code">src/query.ts</span></a>, while child agents are launched through
+            <a href="https://github.com/shiyinw/claude-code/blob/main/src/tools/AgentTool/runAgent.ts" target="_blank"><span class="code">src/tools/AgentTool/runAgent.ts</span></a>
             and then re-enter that same machinery with scoped configuration. Streaming, tool calling, retries, context
             compaction, and transcript format stay consistent across parent and child execution.
           </p>
@@ -502,7 +502,7 @@
         <div class="flow-block orange">
           <p>
             <span class="hl">Child-context isolation</span> sits in the same layer. In
-            <a href="src/utils/forkedAgent.ts" target="_blank"><span class="code">src/utils/forkedAgent.ts</span></a>, different
+            <a href="https://github.com/shiyinw/claude-code/blob/main/src/utils/forkedAgent.ts" target="_blank"><span class="code">src/utils/forkedAgent.ts</span></a>, different
             pieces of state are handled according to their role: file-read caches are cloned, content-replacement state
             is cloned by default, <span class="code">getAppState</span> is wrapped, and <span class="code">setAppState</span>
             stays local unless the caller explicitly shares it. Abort control follows the same pattern, with derived
@@ -609,9 +609,9 @@
         </p>
         <p>
           That is why the orchestration story is spread across
-          <a href="src/tools/AgentTool/" target="_blank"><span class="code">src/tools/AgentTool/</span></a>,
-          <a href="src/tasks/" target="_blank"><span class="code">src/tasks/</span></a>, and
-          <a href="src/utils/swarm/" target="_blank"><span class="code">src/utils/swarm/</span></a>. The parent must choose whether a
+          <a href="https://github.com/shiyinw/claude-code/tree/main/src/tools/AgentTool" target="_blank"><span class="code">src/tools/AgentTool/</span></a>,
+          <a href="https://github.com/shiyinw/claude-code/tree/main/src/tasks" target="_blank"><span class="code">src/tasks/</span></a>, and
+          <a href="https://github.com/shiyinw/claude-code/tree/main/src/utils/swarm" target="_blank"><span class="code">src/utils/swarm/</span></a>. The parent must choose whether a
           job should run inline as a child query, as a background task, as a teammate with a different backend, or as
           a remote session. The implementation lives in orchestration, lifecycle, and backend management code rather
           than only in prompting.
@@ -630,8 +630,8 @@
         <p>
           The design keeps the orchestrator separate from the worker executor and models tool scheduling explicitly.
           The logic in
-          <a href="src/services/tools/toolOrchestration.ts" target="_blank"><span class="code">src/services/tools/toolOrchestration.ts</span></a>
-          and <a href="src/services/tools/StreamingToolExecutor.ts" target="_blank"><span class="code">src/services/tools/StreamingToolExecutor.ts</span></a>
+          <a href="https://github.com/shiyinw/claude-code/blob/main/src/services/tools/toolOrchestration.ts" target="_blank"><span class="code">src/services/tools/toolOrchestration.ts</span></a>
+          and <a href="https://github.com/shiyinw/claude-code/blob/main/src/services/tools/StreamingToolExecutor.ts" target="_blank"><span class="code">src/services/tools/StreamingToolExecutor.ts</span></a>
           treats concurrency as a correctness problem with latency tradeoffs. That gives the whole system a more
           operational feel.
         </p>
@@ -651,7 +651,7 @@
           </p>
           <p>
             The remote path follows the same pattern. In
-            <a href="src/bridge/remoteBridgeCore.ts" target="_blank"><span class="code">src/bridge/remoteBridgeCore.ts</span></a>
+            <a href="https://github.com/shiyinw/claude-code/blob/main/src/bridge/remoteBridgeCore.ts" target="_blank"><span class="code">src/bridge/remoteBridgeCore.ts</span></a>
             remote execution includes session creation, bridge credential refresh, transport rebuilds, and ingress-message
             handling. The result is a <span class="hl">session transport layer</span> with its own runtime concerns.
           </p>
@@ -683,8 +683,8 @@
           <p>
             The <span class="hl">task model</span> gives the architecture its operational shape. Background agents in Claude are explicitly
             registered as tasks. In
-            <a href="src/tasks/LocalAgentTask/LocalAgentTask.tsx" target="_blank"><span class="code">src/tasks/LocalAgentTask/LocalAgentTask.tsx</span></a>
-            and <a href="src/Task.ts" target="_blank"><span class="code">src/Task.ts</span></a>, tasks carry ids, state, output
+            <a href="https://github.com/shiyinw/claude-code/blob/main/src/tasks/LocalAgentTask/LocalAgentTask.tsx" target="_blank"><span class="code">src/tasks/LocalAgentTask/LocalAgentTask.tsx</span></a>
+            and <a href="https://github.com/shiyinw/claude-code/blob/main/src/Task.ts" target="_blank"><span class="code">src/Task.ts</span></a>, tasks carry ids, state, output
             files, transcript paths, progress, retention behavior, and notification flags. That is what makes
             background execution resumable, killable, and observable.
           </p>
@@ -786,17 +786,17 @@
             plan-mode constraint, a decision about worktree isolation, and a decision about whether it may continue in
             the background. A lot of that logic
             sits in
-            <a href="src/tools/AgentTool/runAgent.ts" target="_blank"><span class="code">src/tools/AgentTool/runAgent.ts</span></a>
+            <a href="https://github.com/shiyinw/claude-code/blob/main/src/tools/AgentTool/runAgent.ts" target="_blank"><span class="code">src/tools/AgentTool/runAgent.ts</span></a>
             and the surrounding tool-execution stack. Claude is careful here: agents can define their own permission
             modes, some parent modes still take precedence, and async agents can run under policies that suppress
             direct permission dialogs.
           </p>
           <p>
             The same discipline appears in <span class="hl">concurrency</span>. At the tool layer,
-            <a href="src/services/tools/toolOrchestration.ts" target="_blank"><span class="code">src/services/tools/toolOrchestration.ts</span></a>
+            <a href="https://github.com/shiyinw/claude-code/blob/main/src/services/tools/toolOrchestration.ts" target="_blank"><span class="code">src/services/tools/toolOrchestration.ts</span></a>
             explicitly separates concurrency-safe calls from operations that should remain serialized, while the
             streaming path in
-            <a href="src/services/tools/StreamingToolExecutor.ts" target="_blank"><span class="code">src/services/tools/StreamingToolExecutor.ts</span></a>
+            <a href="https://github.com/shiyinw/claude-code/blob/main/src/services/tools/StreamingToolExecutor.ts" target="_blank"><span class="code">src/services/tools/StreamingToolExecutor.ts</span></a>
             preserves output order even when execution overlaps. The same logic should apply to agents: research work
             can fan out, while multiple workers touching the same files usually need tighter coordination. Concurrency
             is handled here as a correctness problem with explicit execution rules.
@@ -806,7 +806,7 @@
             forked worker, a worktree-isolated child, an in-process teammate, a tmux or iTerm2 pane teammate, and a
             remote session all keep the same basic structure: workers have identities and transcripts, tasks have ids,
             and results return through structured coordination paths. Files like
-            <a href="src/utils/swarm/backends/registry.ts" target="_blank"><span class="code">src/utils/swarm/backends/registry.ts</span></a>
+            <a href="https://github.com/shiyinw/claude-code/blob/main/src/utils/swarm/backends/registry.ts" target="_blank"><span class="code">src/utils/swarm/backends/registry.ts</span></a>
             show how that coordination model extends across backends.
           </p>
           <p>
