@@ -1,0 +1,122 @@
+direction: down
+
+# 2. Query Turn Orchestration Flow
+
+author: "Report: https://github.com/shiyinw/claude-code" {
+  shape: text
+}
+
+start: "User prompt enters query()" {
+  shape: oval
+  style.fill: "#DBEAFE"
+  style.stroke: "#1D4ED8"
+}
+
+build_context: "Build turn context\nmessages + system prompt + budgets" {
+  shape: rectangle
+  style.fill: "#BFDBFE"
+  style.stroke: "#2563EB"
+}
+
+model_step: "Model emits assistant content" {
+  shape: rectangle
+  style.fill: "#BFDBFE"
+  style.stroke: "#2563EB"
+}
+
+tool_check: "Any tool_use blocks?" {
+  shape: diamond
+  style.fill: "#FEF3C7"
+  style.stroke: "#D97706"
+}
+
+tool_exec: "runToolUse()\nvalidate + permission + hooks" {
+  shape: rectangle
+  style.fill: "#DCFCE7"
+  style.stroke: "#15803D"
+}
+
+conc_check: "Concurrency-safe batch?" {
+  shape: diamond
+  style.fill: "#FEF3C7"
+  style.stroke: "#D97706"
+}
+
+parallel: "Run concurrent-safe tools\nqueue context modifiers" {
+  shape: rectangle
+  style.fill: "#BBF7D0"
+  style.stroke: "#166534"
+}
+
+serial: "Run tools serially\ncommit context immediately" {
+  shape: rectangle
+  style.fill: "#D1FAE5"
+  style.stroke: "#047857"
+}
+
+streaming: "StreamingToolExecutor\npreserve output order" {
+  shape: rectangle
+  style.fill: "#CCFBF1"
+  style.stroke: "#0F766E"
+}
+
+task_decision: "Spawn explicit task?" {
+  shape: diamond
+  style.fill: "#FEF3C7"
+  style.stroke: "#D97706"
+}
+
+task_paths: "Register task\nlocal agent / shell / teammate / remote" {
+  shape: rectangle
+  style.fill: "#FDE68A"
+  style.stroke: "#B45309"
+}
+
+append_results: "Append tool_result blocks\nand update messages" {
+  shape: rectangle
+  style.fill: "#FED7AA"
+  style.stroke: "#C2410C"
+}
+
+compact_check: "Need compact / retry / continuation?" {
+  shape: diamond
+  style.fill: "#FEF3C7"
+  style.stroke: "#D97706"
+}
+
+compact: "Compact history or continue turn" {
+  shape: rectangle
+  style.fill: "#EDE9FE"
+  style.stroke: "#7C3AED"
+}
+
+finish: "Return final assistant answer" {
+  shape: oval
+  style.fill: "#E7E5E4"
+  style.stroke: "#57534E"
+}
+
+start -> build_context
+build_context -> model_step
+model_step -> tool_check
+
+tool_check -> finish: "no"
+tool_check -> tool_exec: "yes"
+
+tool_exec -> conc_check
+conc_check -> parallel: "yes"
+conc_check -> serial: "no"
+
+parallel -> streaming: "if streaming path"
+parallel -> task_decision: "or buffered completion"
+serial -> task_decision
+streaming -> task_decision
+
+task_decision -> task_paths: "task-backed work"
+task_decision -> append_results: "ordinary tool result"
+task_paths -> append_results
+
+append_results -> compact_check
+compact_check -> compact: "yes"
+compact_check -> model_step: "continue with new context"
+compact -> model_step

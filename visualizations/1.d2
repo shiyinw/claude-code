@@ -1,0 +1,143 @@
+direction: down
+
+# 1. Claude Code Runtime Containers
+
+author: "Report: https://github.com/shiyinw/claude-code" {
+  shape: text
+}
+
+user: "User / CLI / Desktop / SDK" {
+  shape: person
+  style.fill: "#E7E5E4"
+  style.stroke: "#57534E"
+}
+
+control_plane: {
+  label: "Control Plane"
+  style.fill: "#FFF7ED"
+  style.stroke: "#C2410C"
+  style.stroke-width: 2
+
+  app_runtime: "App Runtime\n(main UI + state transitions)" {
+    shape: rectangle
+    style.fill: "#DBEAFE"
+    style.stroke: "#1D4ED8"
+  }
+
+  query_engine: "QueryEngine\nconversation lifecycle wrapper" {
+    shape: rectangle
+    style.fill: "#DBEAFE"
+    style.stroke: "#2563EB"
+  }
+
+  query_loop: "Query Loop\nsrc/query.ts" {
+    shape: rectangle
+    style.fill: "#BFDBFE"
+    style.stroke: "#2563EB"
+  }
+
+  tool_registry: "Tool Registry\nsrc/tools.ts" {
+    shape: rectangle
+    style.fill: "#FDE68A"
+    style.stroke: "#B45309"
+  }
+
+  task_registry: "Task Registry\nsrc/tasks.ts + src/Task.ts" {
+    shape: rectangle
+    style.fill: "#FCD34D"
+    style.stroke: "#92400E"
+  }
+}
+
+execution_plane: {
+  label: "Execution Plane"
+  style.fill: "#F0FDF4"
+  style.stroke: "#15803D"
+  style.stroke-width: 2
+
+  tool_exec: "Tool Execution\nvalidation + permissions + hooks" {
+    shape: rectangle
+    style.fill: "#DCFCE7"
+    style.stroke: "#15803D"
+  }
+
+  orch: "Tool Orchestration\nserial batches + safe parallelism" {
+    shape: rectangle
+    style.fill: "#BBF7D0"
+    style.stroke: "#166534"
+  }
+
+  stream_exec: "Streaming Tool Executor\nordered buffered results" {
+    shape: rectangle
+    style.fill: "#DCFCE7"
+    style.stroke: "#166534"
+  }
+
+  agents: "Agent Execution\ninline agents + local background tasks" {
+    shape: rectangle
+    style.fill: "#D1FAE5"
+    style.stroke: "#047857"
+  }
+
+  swarm: "Swarm / Teammate Layer\nin-process, tmux, iTerm2" {
+    shape: rectangle
+    style.fill: "#CCFBF1"
+    style.stroke: "#0F766E"
+  }
+
+  remote: "Remote Session Layer\nremote agents + bridge transport" {
+    shape: rectangle
+    style.fill: "#FECACA"
+    style.stroke: "#B91C1C"
+  }
+}
+
+state: "State + Transcripts\nAppState / task metadata / session storage" {
+  shape: cylinder
+  style.fill: "#FAFAF9"
+  style.stroke: "#78716C"
+}
+
+queue: "Message Queue + Notifications\ncommand lifecycle / task notifications" {
+  shape: rectangle
+  style.fill: "#FFE4E6"
+  style.stroke: "#BE123C"
+}
+
+integrations: "External Integrations\nfilesystem / shell / MCP / network APIs" {
+  shape: hexagon
+  style.fill: "#ECFCCB"
+  style.stroke: "#4D7C0F"
+}
+
+user -> control_plane.app_runtime: "prompt / commands / approvals"
+control_plane.app_runtime -> user: "rendered responses / progress / alerts"
+
+control_plane.app_runtime -> control_plane.query_engine: "conversation/session control"
+control_plane.query_engine -> control_plane.query_loop: "submit turn / stream results"
+control_plane.query_loop -> control_plane.tool_registry: "resolve tool definitions"
+control_plane.query_loop -> control_plane.task_registry: "register or inspect tasks"
+
+control_plane.query_loop -> execution_plane.tool_exec: "tool_use blocks"
+execution_plane.tool_exec -> execution_plane.orch: "classify safe vs serial"
+execution_plane.orch -> execution_plane.stream_exec: "streaming path"
+execution_plane.orch -> execution_plane.tool_exec: "serial path"
+execution_plane.stream_exec -> execution_plane.tool_exec: "ordered tool results"
+
+execution_plane.tool_exec -> execution_plane.agents: "AgentTool / child agents"
+execution_plane.tool_exec -> execution_plane.swarm: "TeamCreate / SendMessage / teammates"
+execution_plane.tool_exec -> execution_plane.remote: "remote agent sessions"
+
+execution_plane.tool_exec -> integrations: "file ops / shell / web / MCP"
+execution_plane.agents -> integrations: "local agent work"
+execution_plane.swarm -> integrations: "pane backends / mailbox I/O"
+execution_plane.remote -> integrations: "session ingress / SSE / CCR"
+
+control_plane.query_loop -> state: "messages / compact state / context"
+execution_plane.tool_exec -> state: "tool results / telemetry-safe metadata"
+execution_plane.agents -> state: "task outputs / transcripts"
+execution_plane.swarm -> state: "teammate state / pending mail"
+execution_plane.remote -> state: "remote logs / restore metadata"
+
+control_plane.task_registry -> queue: "enqueue task notifications"
+queue -> control_plane.query_loop: "inject queued system/user work"

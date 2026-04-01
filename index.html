@@ -1,0 +1,848 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>How Claude Code Designs Agent Orchestration</title>
+    <script type="module">
+      import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs";
+      mermaid.initialize({
+        startOnLoad: true,
+        theme: "default",
+        sequence: {
+          useMaxWidth: true,
+          wrap: true,
+        },
+        flowchart: {
+          useMaxWidth: true,
+          htmlLabels: true,
+        },
+      });
+    </script>
+    <style>
+      :root {
+        --bg: #f5efe6;
+        --bg-deep: #efe3d2;
+        --paper: rgba(255, 252, 247, 0.94);
+        --paper-strong: #fffaf2;
+        --ink: #1c1917;
+        --muted: #57534e;
+        --line: #d6d3d1;
+        --accent: #b45309;
+        --accent-soft: #ffedd5;
+        --green: #14532d;
+        --green-soft: #dcfce7;
+        --blue: #1d4ed8;
+        --blue-soft: #dbeafe;
+        --rose: #9f1239;
+        --rose-soft: #ffe4e6;
+        --gold: #92400e;
+        --shadow: 0 24px 60px rgba(28, 25, 23, 0.12);
+        --radius: 24px;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      html {
+        scroll-behavior: smooth;
+      }
+
+      body {
+        margin: 0;
+        color: var(--ink);
+        font-family: "Avenir Next", "Segoe UI", sans-serif;
+        background:
+          radial-gradient(circle at top left, rgba(251, 191, 36, 0.20), transparent 28%),
+          radial-gradient(circle at top right, rgba(59, 130, 246, 0.14), transparent 26%),
+          linear-gradient(180deg, var(--bg) 0%, var(--bg-deep) 100%);
+      }
+
+      .page {
+        max-width: 1180px;
+        margin: 0 auto;
+        padding: 32px 20px 80px;
+      }
+
+      .hero,
+      .section {
+        background: var(--paper);
+        border: 1px solid rgba(214, 211, 209, 0.92);
+        border-radius: var(--radius);
+        box-shadow: var(--shadow);
+        backdrop-filter: blur(10px);
+      }
+
+      .hero {
+        padding: 34px;
+        margin-bottom: 24px;
+        overflow: hidden;
+        position: relative;
+        background:
+          linear-gradient(135deg, rgba(255, 252, 247, 0.94), rgba(255, 248, 240, 0.94));
+      }
+
+      .hero::after {
+        content: "";
+        position: absolute;
+        inset: auto -60px -60px auto;
+        width: 240px;
+        height: 240px;
+        border-radius: 999px;
+        background: radial-gradient(circle, rgba(29, 78, 216, 0.14), transparent 68%);
+        pointer-events: none;
+      }
+
+      .section {
+        padding: 28px;
+        margin-bottom: 22px;
+        position: relative;
+      }
+
+      .section::before {
+        content: "";
+        position: absolute;
+        top: 24px;
+        left: 24px;
+        width: 48px;
+        height: 2px;
+        background: linear-gradient(90deg, rgba(180, 83, 9, 0.9), rgba(180, 83, 9, 0));
+        border-radius: 999px;
+      }
+
+      .eyebrow,
+      .section-tag {
+        display: inline-block;
+        border-radius: 999px;
+        font-size: 12px;
+        font-weight: 800;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+      }
+
+      .eyebrow {
+        padding: 7px 12px;
+        background: var(--accent-soft);
+        color: var(--accent);
+      }
+
+      .section-tag {
+        margin-bottom: 10px;
+        padding: 6px 10px;
+      }
+
+      .arch { background: var(--blue-soft); color: var(--blue); }
+      .method { background: var(--green-soft); color: var(--green); }
+      .insights { background: var(--rose-soft); color: var(--rose); }
+      .diagrams { background: var(--accent-soft); color: var(--accent); }
+
+      h1,
+      h2,
+      h3 {
+        font-family: "Iowan Old Style", "Palatino Linotype", Georgia, serif;
+        letter-spacing: -0.02em;
+      }
+
+      h1 {
+        margin: 14px 0 12px;
+        font-size: clamp(2.5rem, 5vw, 4.25rem);
+        line-height: 0.98;
+        max-width: 920px;
+      }
+
+      h2 {
+        margin: 0 0 10px;
+        font-size: clamp(1.8rem, 3vw, 2.4rem);
+      }
+
+      h3 {
+        margin: 0 0 10px;
+        font-size: 1.18rem;
+      }
+
+      p,
+      li {
+        color: var(--muted);
+        line-height: 1.72;
+        font-size: 1.03rem;
+      }
+
+      .lede {
+        max-width: none;
+        font-size: 1.16rem;
+        line-height: 1.82;
+        color: #292524;
+      }
+
+      .thesis,
+      .quote,
+      .card,
+      .hero-stat,
+      .flow-block {
+        background: var(--paper-strong);
+        border: 1px solid var(--line);
+        border-radius: 18px;
+        padding: 18px;
+      }
+
+      .thesis {
+        border-left: 4px solid var(--accent);
+        padding: 18px 20px;
+        border-radius: 0 18px 18px 0;
+        background: linear-gradient(180deg, #fff7ed, #fffaf5);
+        color: #431407;
+        font-size: 1.08rem;
+        line-height: 1.7;
+        margin-top: 18px;
+        max-width: none;
+      }
+
+      .hero-grid,
+      .grid-2,
+      .hero-grid {
+        grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+        margin-top: 22px;
+      }
+
+      .grid-2 {
+        grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+      }
+
+      .hero-stat strong {
+        display: block;
+        font-size: 1.8rem;
+        color: var(--ink);
+        font-family: "Iowan Old Style", "Palatino Linotype", Georgia, serif;
+      }
+
+      .hero-stat span {
+        color: var(--muted);
+        font-size: 0.95rem;
+      }
+
+      .toc {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        margin-top: 22px;
+      }
+
+      .toc a,
+      .diagram-links a {
+        color: var(--blue);
+        text-decoration: none;
+      }
+
+      a {
+        color: var(--blue);
+        text-decoration-thickness: 1.2px;
+        text-underline-offset: 0.12em;
+      }
+
+      a:hover {
+        color: #1e40af;
+      }
+
+      .toc a {
+        padding: 12px 14px;
+        border-radius: 999px;
+        background: rgba(255, 255, 255, 0.7);
+        border: 1px solid var(--line);
+        font-size: 0.95rem;
+      }
+
+      .code {
+        font-family: ui-monospace, "SFMono-Regular", Menlo, monospace;
+        font-size: 0.92em;
+        color: #7c2d12;
+        background: #fff1df;
+        border: 1px solid #fed7aa;
+        border-radius: 8px;
+        padding: 0.12rem 0.45rem;
+        box-decoration-break: clone;
+      }
+
+      .hl {
+        color: var(--ink);
+        background: linear-gradient(180deg, transparent 50%, rgba(255, 237, 213, 0.95) 50%);
+        font-weight: 600;
+        padding: 0 0.08em;
+      }
+
+      ul,
+      ol {
+        padding-left: 22px;
+      }
+
+      li + li {
+        margin-top: 8px;
+      }
+
+      .section-intro {
+        max-width: none;
+        margin-bottom: 18px;
+        font-size: 1.08rem;
+        color: #3f3a35;
+      }
+
+      .quote {
+        background: linear-gradient(180deg, #fff7ed, #fffaf2);
+        margin-top: 18px;
+      }
+
+      .mermaid-wrap {
+        margin-top: 16px;
+        border: 1px solid var(--line);
+        border-radius: 16px;
+        background:
+          linear-gradient(180deg, rgba(255,255,255,1), rgba(250,248,245,1));
+        padding: 16px;
+        overflow-x: auto;
+        box-shadow: inset 0 1px 0 rgba(255,255,255,0.8);
+      }
+
+      .mermaid {
+        min-width: 720px;
+      }
+
+      .matrix-table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 0.95rem;
+        background: #fff;
+        border: 1px solid var(--line);
+        overflow: hidden;
+        border-radius: 16px;
+      }
+
+      .matrix-table th,
+      .matrix-table td {
+        border: 1px solid var(--line);
+        padding: 12px 14px;
+        text-align: left;
+        vertical-align: top;
+      }
+
+      .matrix-table th {
+        background: linear-gradient(180deg, #f8f6f2, #f2efea);
+        color: var(--ink);
+      }
+
+      .caption {
+        margin-top: 10px;
+        font-size: 0.92rem;
+        color: var(--muted);
+        max-width: none;
+      }
+
+      .diagram-links {
+        display: flex;
+        gap: 14px;
+        flex-wrap: wrap;
+        margin-top: 12px;
+        font-size: 0.95rem;
+      }
+
+      .figure {
+        margin: 22px 0 8px;
+        background:
+          linear-gradient(180deg, rgba(255,255,255,1), rgba(250,248,245,1));
+        border: 1px solid var(--line);
+        border-radius: 18px;
+        padding: 18px;
+        box-shadow:
+          inset 0 1px 0 rgba(255,255,255,0.82),
+          0 12px 28px rgba(28, 25, 23, 0.06);
+      }
+
+      .figure img {
+        width: 100%;
+        border-radius: 14px;
+        border: 1px solid var(--line);
+        background: #fff;
+      }
+
+      .flow-block {
+        padding: 22px;
+        box-shadow: 0 10px 22px rgba(28, 25, 23, 0.05);
+        margin-top: 16px;
+      }
+
+      .flow-block.blue {
+        border-top: 4px solid rgba(29, 78, 216, 0.78);
+      }
+
+      .flow-block.orange {
+        border-top: 4px solid rgba(180, 83, 9, 0.78);
+      }
+
+      .flow-block.green {
+        border-top: 4px solid rgba(20, 83, 45, 0.78);
+      }
+
+      .footer {
+        text-align: center;
+        color: var(--muted);
+        font-size: 0.95rem;
+        margin-top: 28px;
+      }
+
+      @media (max-width: 700px) {
+        .page {
+          padding: 18px 14px 56px;
+        }
+
+        .hero,
+        .section {
+          padding: 20px;
+          border-radius: 20px;
+        }
+
+        .section::before {
+          left: 20px;
+          top: 18px;
+        }
+
+        .toc a {
+          width: 100%;
+          text-align: center;
+        }
+
+        .mermaid {
+          min-width: 640px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main class="page">
+      <section class="hero">
+        <span class="eyebrow">System Design Blog</span>
+        <h1>How Claude Code Designs Agent Orchestration</h1>
+        <p class="lede">
+          One shared runtime, explicit delegation tools, isolated child contexts, and a task model for long-running work.
+        </p>
+        <div class="toc">
+          <a href="#architecture" target="_blank">Core Runtime</a>
+          <a href="#delegation" target="_blank">Execution Flow</a>
+          <a href="#tasks" target="_blank">Operational Model</a>
+          <a href="#closing" target="_blank">Postscript</a>
+        </div>
+      </section>
+
+      <section class="section" id="architecture">
+        <span class="section-tag arch">Core Runtime</span>
+        <h2>One runtime, many agents</h2>
+        <p class="section-intro">
+          Claude Code is organized around a <span class="hl">control plane</span> for many LLM calls. The core turn
+          loop lives in <a href="src/query.ts" target="_blank"><span class="code">src/query.ts</span></a>, and child agents extend
+          that same runtime. That keeps streaming, tools, permissions, compaction, and retry behavior aligned across
+          parent and child execution.
+        </p>
+        <p>
+          The top-level architecture is straightforward. A main orchestrator loop decides when delegation is useful. A
+          spawn mechanism creates a child agent with scoped
+          permissions, tools, and context. A task layer tracks lifecycle, progress, cancellation, and notifications.
+          A re-entry path feeds completed child results back into the parent conversation. The codebase keeps that
+          structure visible through explicit runtime, task, and tool boundaries.
+        </p>
+        <div class="figure">
+          <img src="visualizations/1.svg" alt="Claude Code runtime containers diagram" />
+          <div class="diagram-links">
+            <a href="visualizations/1.svg" target="_blank">Open SVG</a>
+            <a href="visualizations/1.d2" target="_blank">View D2 Source</a>
+          </div>
+          <p class="caption">
+            The high-level picture is a control plane anchored by the query loop and registries, an execution plane for
+            tools and agents, persistent state, and external integration surfaces.
+          </p>
+        </div>
+        <p>
+          That shape keeps the codebase from collapsing into one “agent does everything” loop. The tool registry in
+          <a href="src/tools.ts" target="_blank"><span class="code">src/tools.ts</span></a>,
+          the task registry in <a href="src/tasks.ts" target="_blank"><span class="code">src/tasks.ts</span></a>, and the task model
+          in <a href="src/Task.ts" target="_blank"><span class="code">src/Task.ts</span></a> give the system explicit control-plane
+          objects. That makes orchestration easier to debug, resume, and extend.
+        </p>
+        <p>
+          It is worth being precise about the phrase “shared runtime.” Claude Code has both the generator loop
+          in <a href="src/query.ts" target="_blank"><span class="code">src/query.ts</span></a> and a stateful wrapper in
+          <a href="src/QueryEngine.ts" target="_blank"><span class="code">src/QueryEngine.ts</span></a>. The former is the turn kernel.
+          The latter owns conversation-level lifecycle and persistence for the SDK and headless path. Together, they
+          make the control plane feel like a runtime with clear ownership of turns, sessions, and persistence.
+        </p>
+        <div class="flow-block blue">
+          <p>
+            The key architectural choice is <span class="hl">runtime reuse</span>. Parent and child agents rely on the same core loop: the main
+            flow still lives in
+            <a href="src/query.ts" target="_blank"><span class="code">src/query.ts</span></a>, while child agents are launched through
+            <a href="src/tools/AgentTool/runAgent.ts" target="_blank"><span class="code">src/tools/AgentTool/runAgent.ts</span></a>
+            and then re-enter that same machinery with scoped configuration. Streaming, tool calling, retries, context
+            compaction, and transcript format stay consistent across parent and child execution.
+          </p>
+          <p>
+            That pattern scales well in practice. A solid single-agent runtime becomes the foundation, and delegation
+            becomes runtime instantiation with different configuration. Shared semantics across parent and worker paths
+            make maintenance, debugging, and operational behavior much more predictable.
+          </p>
+          <p>
+            Claude keeps orchestration and execution separate. The decision layer chooses whether to
+            spawn an agent, what kind of agent to spawn, whether it should run in the foreground or background, and
+            whether it should be isolated in a worktree. The actual work still belongs to the child runtime. That
+            separation prevents routing logic, lifecycle control, and task execution from collapsing into one tangled
+            block of code.
+          </p>
+          <p>
+            <span class="hl">Transcript-first observability</span> also shows up here. Claude repeatedly
+            pushes agent work into transcripts, sidecar metadata, and task output files. That makes the system easier
+            to inspect while it is running and easier to recover or audit later.
+          </p>
+        </div>
+        <div class="flow-block orange">
+          <p>
+            <span class="hl">Child-context isolation</span> sits in the same layer. In
+            <a href="src/utils/forkedAgent.ts" target="_blank"><span class="code">src/utils/forkedAgent.ts</span></a>, different
+            pieces of state are handled according to their role: file-read caches are cloned, content-replacement state
+            is cloned by default, <span class="code">getAppState</span> is wrapped, and <span class="code">setAppState</span>
+            stays local unless the caller explicitly shares it. Abort control follows the same pattern, with derived
+            child controllers on some paths and shared parent control on a few synchronous paths.
+          </p>
+          <p>
+            Selective isolation is the design point that matters. In real multi-agent systems, the hard problem is
+            deciding which state can safely be shared and which state must remain isolated. That boundary shapes
+            permission safety, retry behavior, prompt integrity, and parent-facing UI state.
+          </p>
+          <table class="matrix-table">
+            <thead>
+              <tr>
+                <th>Parent field / capability</th>
+                <th>Child behavior</th>
+                <th>Category</th>
+                <th>Why it matters</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><span class="code">messages</span></td>
+                <td>Caller decides what to pass as initial child messages</td>
+                <td>caller-controlled</td>
+                <td>Forked agents may inherit parent context; normal subagents usually get a narrower prompt</td>
+              </tr>
+              <tr>
+                <td><span class="code">readFileState</span></td>
+                <td>cloned</td>
+                <td>cloned</td>
+                <td>Child reads do not mutate the parent cache directly</td>
+              </tr>
+              <tr>
+                <td><span class="code">contentReplacementState</span></td>
+                <td>cloned by default, overrideable</td>
+                <td>cloned</td>
+                <td>Preserves prompt-cache-stable replacement behavior</td>
+              </tr>
+              <tr>
+                <td><span class="code">abortController</span></td>
+                <td>new child controller by default</td>
+                <td>derived</td>
+                <td>Parent abort propagates downward without giving the child normal authority to abort the parent</td>
+              </tr>
+              <tr>
+                <td><span class="code">getAppState</span></td>
+                <td>wrapped by default</td>
+                <td>wrapped/shared read</td>
+                <td>Child can still see root runtime state, often with prompt-avoidance adjustments</td>
+              </tr>
+              <tr>
+                <td><span class="code">setAppState</span></td>
+                <td>no-op unless explicitly shared</td>
+                <td>opt-in shared mutation</td>
+                <td>Isolation by default prevents child writes into parent UI or session state</td>
+              </tr>
+              <tr>
+                <td><span class="code">setAppStateForTasks</span></td>
+                <td>always preserved from root store</td>
+                <td>always shared control path</td>
+                <td>Async task registration and kill must still work even when <span class="code">setAppState</span> is isolated</td>
+              </tr>
+              <tr>
+                <td><span class="code">setResponseLength</span></td>
+                <td>no-op unless explicitly shared</td>
+                <td>opt-in callback share</td>
+                <td>Keeps child metrics from polluting parent unless desired</td>
+              </tr>
+              <tr>
+                <td><span class="code">tool options</span></td>
+                <td>overridden by caller or filtered for child</td>
+                <td>overridden</td>
+                <td>Child gets scoped tools, query source, and agent identity</td>
+              </tr>
+              <tr>
+                <td><span class="code">permission context</span></td>
+                <td>usually narrowed or adjusted</td>
+                <td>overridden/wrapped</td>
+                <td>Background agents often run under prompt-suppressed permission policies</td>
+              </tr>
+              <tr>
+                <td><span class="code">discoveredSkillNames</span> and similar sets</td>
+                <td>fresh per child</td>
+                <td>fresh isolated state</td>
+                <td>Prevents cross-agent telemetry and state pollution</td>
+              </tr>
+              <tr>
+                <td><span class="code">toolDecisions</span></td>
+                <td>reset</td>
+                <td>fresh isolated state</td>
+                <td>Keeps per-agent tool decisions independent</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="section" id="delegation">
+        <span class="section-tag method">Execution Flow</span>
+        <h2>How a turn becomes routed agent work</h2>
+        <p class="section-intro">
+          Delegation is implemented as a routing decision with different execution modes, isolation levels, and
+          lifecycle consequences.
+        </p>
+        <p>
+          That is why the orchestration story is spread across
+          <a href="src/tools/AgentTool/" target="_blank"><span class="code">src/tools/AgentTool/</span></a>,
+          <a href="src/tasks/" target="_blank"><span class="code">src/tasks/</span></a>, and
+          <a href="src/utils/swarm/" target="_blank"><span class="code">src/utils/swarm/</span></a>. The parent must choose whether a
+          job should run inline as a child query, as a background task, as a teammate with a different backend, or as
+          a remote session. The implementation lives in orchestration, lifecycle, and backend management code rather
+          than only in prompting.
+        </p>
+        <div class="figure">
+          <img src="visualizations/2.svg" alt="Claude Code turn orchestration flow diagram" />
+          <div class="diagram-links">
+            <a href="visualizations/2.svg" target="_blank">Open SVG</a>
+            <a href="visualizations/2.d2" target="_blank">View D2 Source</a>
+          </div>
+          <p class="caption">
+            Inside a turn, model output becomes tool calls, tool scheduling distinguishes safe parallel work from
+            serialized work, and some tool results become task-backed execution paths with their own lifecycle.
+          </p>
+        </div>
+        <p>
+          The design keeps the orchestrator separate from the worker executor and models tool scheduling explicitly.
+          The logic in
+          <a href="src/services/tools/toolOrchestration.ts" target="_blank"><span class="code">src/services/tools/toolOrchestration.ts</span></a>
+          and <a href="src/services/tools/StreamingToolExecutor.ts" target="_blank"><span class="code">src/services/tools/StreamingToolExecutor.ts</span></a>
+          treats concurrency as a correctness problem with latency tradeoffs. That gives the whole system a more
+          operational feel.
+        </p>
+        <div class="flow-block green">
+          <p>
+            The trigger path inside a turn is the main design surface. The model emits tool calls, the
+            system decides which tools are safe to run concurrently and which must be serialized, and some of those
+            tool results expand into <span class="hl">task-backed execution paths</span>. Multi-agent work appears here as part of a
+            unified scheduling model.
+          </p>
+          <p>
+            The same logic extends naturally into the lifecycle topology shown below. Inline child agents,
+            background local agents, in-process teammates, tmux or iTerm2 pane teammates, and remote sessions may look
+            like separate features, yet they share one orchestration shape across different isolation boundaries. That
+            abstraction supports background work, multi-worker coordination, and remote sessions without requiring a
+            new framework for each execution mode.
+          </p>
+          <p>
+            The remote path follows the same pattern. In
+            <a href="src/bridge/remoteBridgeCore.ts" target="_blank"><span class="code">src/bridge/remoteBridgeCore.ts</span></a>
+            remote execution includes session creation, bridge credential refresh, transport rebuilds, and ingress-message
+            handling. The result is a <span class="hl">session transport layer</span> with its own runtime concerns.
+          </p>
+        </div>
+        <div class="figure">
+          <img src="visualizations/3.svg" alt="Claude Code delegation topology diagram" />
+          <div class="diagram-links">
+            <a href="visualizations/3.svg" target="_blank">Open SVG</a>
+            <a href="visualizations/3.d2" target="_blank">View D2 Source</a>
+          </div>
+          <p class="caption">
+            The lifecycle design starts with an isolation choice and then routes work into inline subagents, background
+            workers, swarm backends, or remote sessions with different state and transcript boundaries.
+          </p>
+        </div>
+        <p>
+          If you abstract this into a general systems lesson, it is simple: a good multi-agent platform should support
+          logical isolation, workspace isolation, and compute isolation at the same time. Claude’s code is clearly
+          organized in that direction. The same coordination model also carries across those worker substrates, with a
+          shared vocabulary of tasks, transcripts, notifications, and mailboxes. That consistency is a useful part of
+          the platform design.
+        </p>
+      </section>
+
+      <section class="section" id="tasks">
+        <span class="section-tag insights">Operational Model</span>
+        <h2>Tasks, re-entry, permissions, and concurrency</h2>
+        <div class="flow-block blue">
+          <p>
+            The <span class="hl">task model</span> gives the architecture its operational shape. Background agents in Claude are explicitly
+            registered as tasks. In
+            <a href="src/tasks/LocalAgentTask/LocalAgentTask.tsx" target="_blank"><span class="code">src/tasks/LocalAgentTask/LocalAgentTask.tsx</span></a>
+            and <a href="src/Task.ts" target="_blank"><span class="code">src/Task.ts</span></a>, tasks carry ids, state, output
+            files, transcript paths, progress, retention behavior, and notification flags. That is what makes
+            background execution resumable, killable, and observable.
+          </p>
+          <p>
+            The sequence view fits this part of the system because the main concern is handoff across task
+            registration, detached execution, progress updates, and completion notification.
+          </p>
+          <div class="mermaid-wrap">
+              <pre class="mermaid">sequenceDiagram
+    autonumber
+    actor Parent as Parent Query / AgentTool
+    participant TaskReg as registerAsyncAgent
+    participant TaskState as LocalAgentTask State
+    participant Runner as runAsyncAgentLifecycle
+    participant Agent as runAgent / child query()
+    participant Queue as Command Queue
+    participant Main as Main query()
+
+    Parent->>TaskReg: registerAsyncAgent(agentId, description, prompt)
+    TaskReg->>TaskState: create local_agent task\nstatus = running
+    TaskReg-->>Parent: task handle\n(agentId, abortController, outputFile)
+
+    Parent->>Runner: start detached lifecycle
+    Runner->>Agent: runAgent(...)
+
+    loop while child agent runs
+        Agent->>TaskState: update progress
+        Agent->>TaskState: append transcript / output
+    end
+
+    alt completed
+        Runner->>TaskState: completeAgentTask(...)
+        Runner->>Queue: enqueue task-notification\nstatus=completed
+    else failed
+        Runner->>TaskState: failAgentTask(...)
+        Runner->>Queue: enqueue task-notification\nstatus=failed
+    else killed
+        Runner->>TaskState: killAsyncAgent(...)
+        Runner->>Queue: enqueue task-notification\nstatus=killed
+    end
+
+    Queue->>Main: deliver task-notification command</pre>
+          </div>
+          <div class="caption">
+            The real lesson here is ordering and handoff discipline across task registration, execution, and re-entry.
+          </div>
+          <p>
+            One implementation detail matters here: the task is marked complete before extra post-processing like
+            summarization or worktree cleanup. That keeps task state aligned with the actual end of the work.
+          </p>
+        </div>
+        <div class="flow-block orange">
+          <p>
+            Claude routes completion back through <span class="hl">structured notifications</span>. When a child
+            finishes, the task manager emits an XML-like task notification, the main loop treats it as new input, and
+            the parent decides how that result should be integrated back into the conversation. That keeps background
+            execution and foreground decision-making on clean boundaries.
+          </p>
+          <p>
+            The re-entry path in the second sequence runs through explicit structures such as task state, pending
+            messages, and the command queue. Restoration, logging, and failure recovery all become easier when those
+            events live in the system model.
+          </p>
+          <div class="mermaid-wrap">
+              <pre class="mermaid">sequenceDiagram
+    autonumber
+    participant Agent as Background Agent
+    participant TaskState as LocalAgentTask State
+    participant TaskMgr as Async Agent Lifecycle
+    participant Queue as Command Queue
+    participant Main as Main query()
+    actor User as User
+
+    loop while background agent is active
+        Agent->>TaskState: write transcript / output / progress
+        Main->>TaskState: inspect output file or task metadata
+        Main->>TaskState: queuePendingMessage(...)
+        Agent->>TaskState: drainPendingMessages(...)
+    end
+
+    alt agent completes
+        TaskMgr->>Queue: enqueue task-notification\n(completed)
+    else agent fails
+        TaskMgr->>Queue: enqueue task-notification\n(failed)
+    else agent is killed
+        TaskMgr->>Queue: enqueue task-notification\n(killed)
+    end
+
+    Queue->>Main: deliver task-notification command
+    Main->>Main: convert command to attachment / input
+    Main-->>User: summarize result / decide next step</pre>
+          </div>
+          <div class="caption">
+            This sequence shows the managed state and re-entry path around background agents.
+          </div>
+          <p id="permissions">
+            <span class="hl">Permissions</span> shape a large part of the multi-agent design. A child agent receives a
+            filtered tool surface, a permission mode, a policy around whether it can prompt the user, a possible
+            plan-mode constraint, a decision about worktree isolation, and a decision about whether it may continue in
+            the background. A lot of that logic
+            sits in
+            <a href="src/tools/AgentTool/runAgent.ts" target="_blank"><span class="code">src/tools/AgentTool/runAgent.ts</span></a>
+            and the surrounding tool-execution stack. Claude is careful here: agents can define their own permission
+            modes, some parent modes still take precedence, and async agents can run under policies that suppress
+            direct permission dialogs.
+          </p>
+          <p>
+            The same discipline appears in <span class="hl">concurrency</span>. At the tool layer,
+            <a href="src/services/tools/toolOrchestration.ts" target="_blank"><span class="code">src/services/tools/toolOrchestration.ts</span></a>
+            explicitly separates concurrency-safe calls from operations that should remain serialized, while the
+            streaming path in
+            <a href="src/services/tools/StreamingToolExecutor.ts" target="_blank"><span class="code">src/services/tools/StreamingToolExecutor.ts</span></a>
+            preserves output order even when execution overlaps. The same logic should apply to agents: research work
+            can fan out, while multiple workers touching the same files usually need tighter coordination. Concurrency
+            is handled here as a correctness problem with explicit execution rules.
+          </p>
+          <p>
+            The code also supports multiple isolation modes under one coordination model. A shared-context subagent, a
+            forked worker, a worktree-isolated child, an in-process teammate, a tmux or iTerm2 pane teammate, and a
+            remote session all keep the same basic structure: workers have identities and transcripts, tasks have ids,
+            and results return through structured coordination paths. Files like
+            <a href="src/utils/swarm/backends/registry.ts" target="_blank"><span class="code">src/utils/swarm/backends/registry.ts</span></a>
+            show how that coordination model extends across backends.
+          </p>
+          <p>
+            Delegation cost also shows up in the implementation. Claude’s forked-worker path is designed with
+            prompt-cache reuse in mind. That keeps delegation cheap enough to use during normal work.
+          </p>
+        </div>
+      </section>
+
+      <section class="section" id="closing">
+        <span class="section-tag arch">Postscript</span>
+        <h2>A note on the leak, and on Anthropic</h2>
+        <div class="card">
+          <p>
+            On March 31, 2026, Claude Code’s source became recoverable after a released package exposed a source map
+            that pointed back to the TypeScript codebase. That made it possible to reconstruct a large part of the
+            internal implementation from published artifacts.
+          </p>
+          <p>
+            I first came across that news through
+            <a href="https://x.com/Fried_rice/status/2038894956459290963" target="_blank" rel="noreferrer">this X post</a>.
+            That is what led me to read through the exposed Claude Code source and write this post.
+          </p>
+          <p>
+            I want to write about this code with some respect. I have a lot of admiration for Anthropic, and I
+            think Claude Code reflects serious work on agent orchestration, tool safety, and long-running execution.
+            Reading the code made me appreciate how much engineering sits behind a capable agent system. I’m grateful
+            they have been willing to push on this frontier, even if this particular look into the codebase came from
+            an accidental leak.
+          </p>
+        </div>
+      </section>
+
+      <p class="footer"> Project Repository:
+        <a href="https://github.com/shiyinw/claude-code" target="_blank">https://github.com/shiyinw/claude-code</a>
+      </p>
+    </main>
+  </body>
+</html>

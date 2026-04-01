@@ -1,0 +1,113 @@
+direction: down
+
+# 3. Delegation Modes and Lifecycle Boundaries
+
+author: "Report: https://github.com/shiyinw/claude-code" {
+  shape: text
+}
+
+leader: "Leader Query Loop\nmain session" {
+  shape: rectangle
+  style.fill: "#DBEAFE"
+  style.stroke: "#1D4ED8"
+}
+
+agent_tool: "AgentTool / Team tools" {
+  shape: rectangle
+  style.fill: "#FDE68A"
+  style.stroke: "#B45309"
+}
+
+decision: "Choose execution mode" {
+  shape: diamond
+  style.fill: "#FEF3C7"
+  style.stroke: "#D97706"
+}
+
+inline: "Inline subagent\nrunAgent() + createSubagentContext()" {
+  shape: rectangle
+  style.fill: "#DCFCE7"
+  style.stroke: "#15803D"
+}
+
+background: "Background local agent\nLocalAgentTask / LocalMainSessionTask" {
+  shape: rectangle
+  style.fill: "#D1FAE5"
+  style.stroke: "#047857"
+}
+
+inprocess: "In-process teammate\nAsyncLocalStorage + AppState task" {
+  shape: rectangle
+  style.fill: "#CCFBF1"
+  style.stroke: "#0F766E"
+}
+
+pane_backend: "Pane teammate\nTmuxBackend or ITermBackend" {
+  shape: rectangle
+  style.fill: "#E0F2FE"
+  style.stroke: "#0369A1"
+}
+
+remote: "Remote agent\nRemoteAgentTask + bridge transport" {
+  shape: rectangle
+  style.fill: "#FECACA"
+  style.stroke: "#B91C1C"
+}
+
+mailbox: "Team mailbox + notifications" {
+  shape: cylinder
+  style.fill: "#FAFAF9"
+  style.stroke: "#78716C"
+}
+
+queue: "Task notifications\nand re-entry queue" {
+  shape: rectangle
+  style.fill: "#FFE4E6"
+  style.stroke: "#BE123C"
+}
+
+transcripts: "Task outputs + transcripts + metadata" {
+  shape: cylinder
+  style.fill: "#FAFAF9"
+  style.stroke: "#78716C"
+}
+
+leader -> agent_tool: "delegate work"
+agent_tool -> decision
+
+decision -> inline: "sync child"
+decision -> background: "detached local task"
+decision -> inprocess: "same-process teammate"
+decision -> pane_backend: "visual teammate pane"
+decision -> remote: "cloud / remote session"
+
+inline -> transcripts: "child transcript"
+background -> transcripts: "managed task output"
+inprocess -> transcripts: "task state + transcript"
+pane_backend -> transcripts: "pane task metadata"
+remote -> transcripts: "remote log + restore metadata"
+background -> queue: "task-notification"
+remote -> queue: "poll/notify"
+queue -> leader: "structured re-entry"
+
+inprocess -> mailbox: "send/receive teammate messages"
+pane_backend -> mailbox: "send/receive teammate messages"
+leader -> mailbox: "SendMessage / shutdown requests"
+
+mailbox -> inprocess: "pending work / plan approvals"
+mailbox -> pane_backend: "inbox polling"
+
+note1: "Same orchestration model,\ndifferent isolation boundaries." {
+  shape: rectangle
+  style.fill: "#FFF7ED"
+  style.stroke: "#C2410C"
+}
+
+note2: "Backend adapters hide\ntransport differences from the leader." {
+  shape: rectangle
+  style.fill: "#EFF6FF"
+  style.stroke: "#2563EB"
+}
+
+note1 -> decision
+note2 -> pane_backend
