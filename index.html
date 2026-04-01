@@ -127,6 +127,18 @@
         color: var(--accent);
       }
 
+      .author-line {
+        margin: 14px 0 0;
+        color: var(--muted);
+        font-size: 0.98rem;
+        text-align: right;
+      }
+
+      .author-line a {
+        color: var(--ink);
+        font-weight: 600;
+      }
+
       .section-tag {
         margin-bottom: 10px;
         padding: 6px 10px;
@@ -291,6 +303,31 @@
         margin-top: 18px;
       }
 
+      .prompt-snippets {
+        margin-top: 18px;
+        display: grid;
+        gap: 14px;
+      }
+
+      .prompt-snippet {
+        background: linear-gradient(180deg, #fffaf5, #fff7ed);
+        border: 1px solid #fed7aa;
+        border-radius: 16px;
+        padding: 16px 18px;
+      }
+
+      .prompt-snippet strong {
+        display: block;
+        margin-bottom: 8px;
+        color: #7c2d12;
+        font-size: 0.95rem;
+      }
+
+      .prompt-snippet p {
+        margin: 0;
+        color: #44403c;
+      }
+
       .mermaid-wrap {
         margin-top: 16px;
         border: 1px solid var(--line);
@@ -419,16 +456,39 @@
     <main class="page">
       <section class="hero">
         <span class="eyebrow">System Design Blog</span>
+        
         <h1>How Claude Code Designs Agent Orchestration</h1>
         <p class="lede">
           One shared runtime, explicit delegation tools, isolated child contexts, and a task model for long-running work.
         </p>
+        <p class="author-line">By <a href="https://www.linkedin.com/in/sherilynwang/" target="_blank" rel="noreferrer">Shiyin
+            Wang</a></p>
         <div class="toc">
           <a href="#architecture" target="_blank">Core Runtime</a>
           <a href="#delegation" target="_blank">Execution Flow</a>
           <a href="#tasks" target="_blank">Operational Model</a>
-          <a href="#closing" target="_blank">Postscript</a>
         </div>
+        <p>
+          On March 31, 2026, Claude Code’s source became recoverable after a released package exposed a source map
+          that pointed back to the TypeScript codebase. That made it possible to reconstruct a large part of the
+          internal implementation from published artifacts.
+        </p>
+        <p>
+          I first came across that news through
+          <a href="https://x.com/Fried_rice/status/2038894956459290963" target="_blank" rel="noreferrer">this X post</a>.
+          That is what led me to read through the exposed Claude Code source and write this post.
+        </p>
+        <p>
+          I want to write about this code with some respect. I have a lot of admiration for Anthropic, and I
+          think Claude Code reflects serious work on agent orchestration, tool safety, and long-running execution.
+          Reading the code made me appreciate how much engineering sits behind a capable agent system. I’m grateful
+          they have been willing to push on this frontier, even if this particular look into the codebase came from
+          an accidental leak.
+        </p>
+        <p>
+          This post stays at the level of runtime design, orchestration flow, and original diagrams. It is meant as
+          a technical reading of the system, not a reproduction of detailed internal materials.
+        </p>
       </section>
 
       <section class="section" id="architecture">
@@ -497,6 +557,81 @@
             <span class="hl">Transcript-first observability</span> also shows up here. Claude repeatedly
             pushes agent work into transcripts, sidecar metadata, and task output files. That makes the system easier
             to inspect while it is running and easier to recover or audit later.
+          </p>
+          <p>
+            Persona is part of this design too. Claude Code is not running one generic prompt and hoping it can switch
+            roles on demand. The codebase separates <span class="hl">runtime</span> from <span class="hl">role</span>.
+            The main session prompt in
+            <a href="https://github.com/shiyinw/claude-code/blob/main/src/constants/prompts.ts" target="_blank"><span class="code">src/constants/prompts.ts</span></a>
+            defines the broad interactive persona for Claude Code itself: an agent that helps with software engineering
+            work, uses tools carefully, keeps communication concise, and carries session context such as memory,
+            environment information, and output style. That is the personality of the control plane.
+          </p>
+          <p>
+            Once work is delegated, the role narrows. The default worker in
+            <a href="https://github.com/shiyinw/claude-code/blob/main/src/tools/AgentTool/built-in/generalPurposeAgent.ts" target="_blank"><span class="code">generalPurposeAgent.ts</span></a>
+            is told to complete the task fully, search broadly, analyze across files, and report back succinctly.
+            Around that, Claude defines a small set of built-in specialists with much tighter identities:
+            <a href="https://github.com/shiyinw/claude-code/blob/main/src/tools/AgentTool/built-in/exploreAgent.ts" target="_blank"><span class="code">Explore</span></a>
+            for read-only search,
+            <a href="https://github.com/shiyinw/claude-code/blob/main/src/tools/AgentTool/built-in/planAgent.ts" target="_blank"><span class="code">Plan</span></a>
+            for architecture and implementation planning,
+            <a href="https://github.com/shiyinw/claude-code/blob/main/src/tools/AgentTool/built-in/verificationAgent.ts" target="_blank"><span class="code">verification</span></a>
+            for adversarial checking, and
+            <a href="https://github.com/shiyinw/claude-code/blob/main/src/tools/AgentTool/built-in/claudeCodeGuideAgent.ts" target="_blank"><span class="code">claude-code-guide</span></a>
+            for product and documentation questions.
+          </p>
+          <p>
+            The parent agent has a separate job again. In
+            <a href="https://github.com/shiyinw/claude-code/blob/main/src/tools/AgentTool/prompt.ts" target="_blank"><span class="code">src/tools/AgentTool/prompt.ts</span></a>,
+            it is taught when to launch a worker, when to fork, how to brief the worker, and how to use the result
+            once it comes back. That is why the line “Never delegate understanding” matters: the parent can delegate
+            execution or research, but it still owns judgment. Put differently, Claude keeps <span class="hl">one shared runtime</span>,
+            but it does not flatten every agent into the same voice. It gives each role a prompt, a job, and a tool
+            boundary that match the part it plays in the orchestration.
+          </p>
+          <div class="prompt-snippets">
+            <div class="prompt-snippet">
+              <strong>Main session persona</strong>
+              <p>
+                In
+                <a href="https://github.com/shiyinw/claude-code/blob/main/src/constants/prompts.ts" target="_blank"><span class="code">src/constants/prompts.ts</span></a>,
+                the main agent is framed as “an interactive agent” that helps users with software engineering tasks,
+                uses tools carefully, and communicates clearly.
+              </p>
+            </div>
+            <div class="prompt-snippet">
+              <strong>General-purpose worker</strong>
+              <p>
+                In
+                <a href="https://github.com/shiyinw/claude-code/blob/main/src/tools/AgentTool/built-in/generalPurposeAgent.ts" target="_blank"><span class="code">generalPurposeAgent.ts</span></a>,
+                the worker prompt says: “You are an agent for Claude Code...” and instructs the agent to “Complete the
+                task fully,” search broadly, and return only the essentials.
+              </p>
+            </div>
+            <div class="prompt-snippet">
+              <strong>Specialized workers</strong>
+              <p>
+                The built-in specialists are deliberately narrow. Explore is “a file search specialist,” Plan is “a
+                software architect and planning specialist,” and verification says its job is “to try to break it,” not
+                simply confirm that things look fine.
+              </p>
+            </div>
+            <div class="prompt-snippet">
+              <strong>Parent orchestration prompt</strong>
+              <p>
+                In
+                <a href="https://github.com/shiyinw/claude-code/blob/main/src/tools/AgentTool/prompt.ts" target="_blank"><span class="code">src/tools/AgentTool/prompt.ts</span></a>,
+                the parent is taught when to launch new agents, when to fork, how to write a good brief, and one of
+                the clearest lines in the file: “Never delegate understanding.”
+              </p>
+            </div>
+          </div>
+          <p>
+            This is a useful pattern if you are building your own system. One runtime gives you one execution model.
+            Persona separation gives each agent a clear job. Tool scoping turns that role into an enforceable boundary.
+            The result is easier to reason about than a single all-purpose prompt trying to act as orchestrator,
+            researcher, planner, and verifier at the same time.
           </p>
         </div>
         <div class="flow-block orange">
@@ -816,26 +951,21 @@
         </div>
       </section>
 
-      <section class="section" id="closing">
-        <span class="section-tag arch">Postscript</span>
-        <h2>A note on the leak, and on Anthropic</h2>
+      <section class="section" id="ending">
+        <span class="section-tag method">Design Highlights</span>
+        <h2>What this design gets right</h2>
         <div class="card">
           <p>
-            On March 31, 2026, Claude Code’s source became recoverable after a released package exposed a source map
-            that pointed back to the TypeScript codebase. That made it possible to reconstruct a large part of the
-            internal implementation from published artifacts.
+            The design highlights are fairly clear by the end of the code walk. Claude Code keeps
+            <span class="hl">one shared runtime</span> for parent and child agents, treats delegation as an explicit
+            control-flow decision, forks child state with a narrow and deliberate sharing boundary, and routes
+            long-running work through a <span class="hl">task model</span> with structured notifications. Those choices
+            give the system a readable control plane and make the agent behavior easier to reason about.
           </p>
           <p>
-            I first came across that news through
-            <a href="https://x.com/Fried_rice/status/2038894956459290963" target="_blank" rel="noreferrer">this X post</a>.
-            That is what led me to read through the exposed Claude Code source and write this post.
-          </p>
-          <p>
-            I want to write about this code with some respect. I have a lot of admiration for Anthropic, and I
-            think Claude Code reflects serious work on agent orchestration, tool safety, and long-running execution.
-            Reading the code made me appreciate how much engineering sits behind a capable agent system. I’m grateful
-            they have been willing to push on this frontier, even if this particular look into the codebase came from
-            an accidental leak.
+            The other thing that stands out is discipline around operations. Permissions are scoped, concurrency is
+            modeled explicitly, and different execution modes still fit into the same coordination model. That
+            consistency is what makes the codebase interesting to study from a systems perspective.
           </p>
         </div>
       </section>
